@@ -168,7 +168,8 @@ public class EntityToJson {
             boolean isProjection = projectionNode != null && projectionNode.isBoolean() && projectionNode.asBoolean();
 
             if (id != null) {
-                _session.getGenerateEntityIdOnTheClient().trySetIdentity(entity, id, isProjection);
+                String collectionName = document.path(Constants.Documents.Metadata.KEY).path(Constants.Documents.Metadata.COLLECTION).asText();
+                _session.getGenerateEntityIdOnTheClient().trySetIdentity(collectionName, entity, id, isProjection);
             }
 
             _session.onAfterConversionToEntityInvoke(id, document, entity);
@@ -186,7 +187,8 @@ public class EntityToJson {
 
         populateEntity(entity, document, _session.getConventions().getEntityMapper());
 
-        _session.getGenerateEntityIdOnTheClient().trySetIdentity(entity, id);
+        String collectionName = document.path(Constants.Documents.Metadata.KEY).path(Constants.Documents.Metadata.COLLECTION).asText();
+        _session.getGenerateEntityIdOnTheClient().trySetIdentity(collectionName, entity, id);
     }
 
     public static void populateEntity(Object entity, ObjectNode document, ObjectMapper objectMapper) {

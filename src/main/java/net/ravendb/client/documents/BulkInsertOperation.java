@@ -215,7 +215,7 @@ public class BulkInsertOperation implements CleanCloseable {
         _timeSeriesBatchSize = _conventions.bulkInsert().getTimeSeriesBatchSize();
 
         _generateEntityIdOnTheClient = new GenerateEntityIdOnTheClient(_requestExecutor.getConventions(),
-                entity -> _requestExecutor.getConventions().generateDocumentId(database, entity));
+                (collectionName, entity) -> _requestExecutor.getConventions().generateDocumentId(database, collectionName, entity));
     }
 
     public boolean isUseCompression() {
@@ -264,11 +264,11 @@ public class BulkInsertOperation implements CleanCloseable {
         return store(entity, (IMetadataDictionary) null);
     }
 
-
     public String store(Object entity, IMetadataDictionary metadata) {
         String id;
         if (metadata == null || !metadata.containsKey(Constants.Documents.Metadata.ID)) {
-            id = getId(entity);
+            String collection = metadata.getString(Constants.Documents.Metadata.COLLECTION);
+            id = getId(collection, entity);
         } else {
             id = (String) metadata.get(Constants.Documents.Metadata.ID);
         }
@@ -554,15 +554,15 @@ public class BulkInsertOperation implements CleanCloseable {
 
     private final DocumentConventions _conventions;
 
-    private String getId(Object entity) {
+    private String getId(String collectionName, Object entity) {
         Reference<String> idRef = new Reference<>();
-        if (_generateEntityIdOnTheClient.tryGetIdFromInstance(entity, idRef)) {
+        if (_generateEntityIdOnTheClient.tryGetIdFromInstance(collectionName, entity, idRef)) {
             return idRef.value;
         }
 
-        idRef.value = _generateEntityIdOnTheClient.generateDocumentKeyForStorage(entity);
+        idRef.value = _generateEntityIdOnTheClient.generateDocumentKeyForStorage(collectionName, entity);
 
-        _generateEntityIdOnTheClient.trySetIdentity(entity, idRef.value); // set id property if it was null
+        _generateEntityIdOnTheClient.trySetIdentity(collectionName, entity, idRef.value); // set id property if it was null
         return idRef.value;
     }
 

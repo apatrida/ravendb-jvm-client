@@ -97,14 +97,17 @@ public class HiLoTest extends RemoteTestBase {
                 session.saveChanges();
 
                 MultiDatabaseHiLoIdGenerator multiDbHilo = new MultiDatabaseHiLoIdGenerator(store);
-                String generateDocumentKey = multiDbHilo.generateDocumentId(null, new User());
+                String generateDocumentKey = multiDbHilo.generateDocumentId(null, null, new User());
                 assertThat(generateDocumentKey)
                         .isEqualTo("users/65-A");
 
-                generateDocumentKey = multiDbHilo.generateDocumentId(null, new Product());
+                generateDocumentKey = multiDbHilo.generateDocumentId(null, null, new Product());
                 assertThat(generateDocumentKey)
                         .isEqualTo("products/129-A");
 
+                generateDocumentKey = multiDbHilo.generateDocumentId(null, "xyz", new Product());
+                assertThat(generateDocumentKey)
+                        .isEqualTo("xyz/129-A");
             }
         }
     }

@@ -58,6 +58,7 @@ public interface IDocumentSession extends CleanCloseable {
      * @param id Document id
      */
     void store(Object entity, String changeVector, String id);
+    void store(String collection, Object entity, String changeVector, String id);
 
     /**
      * Stores entity in session, extracts Id from entity using Conventions or generates new one if it is not available.
@@ -65,6 +66,7 @@ public interface IDocumentSession extends CleanCloseable {
      * @param entity Entity to store
      */
     void store(Object entity);
+    void store(String collection, Object entity);
 
     /**
      * Stores the specified dynamic entity, under the specified id.
@@ -72,6 +74,7 @@ public interface IDocumentSession extends CleanCloseable {
      * @param id Id to store this entity under. If other entity exists with the same id it will be overwritten.
      */
     void store(Object entity, String id);
+    void store(String collection, Object entity, String id);
 
     /**
      * Begin a load while including the specified path

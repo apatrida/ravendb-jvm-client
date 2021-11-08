@@ -513,14 +513,16 @@ public abstract class InMemoryDocumentSessionOperations implements CleanCloseabl
             return documentInfo;
         }
 
-        Reference<String> idRef = new Reference<>();
-        if (!generateEntityIdOnTheClient.tryGetIdFromInstance(instance, idRef)) {
-            throw new IllegalStateException("Could not find the document id for " + instance);
-        }
+        // TODO: removed, was this only for informational display?
 
-        assertNoNonUniqueInstance(instance, idRef.value);
+//        Reference<String> idRef = new Reference<>();
+//        if (!generateEntityIdOnTheClient.tryGetIdFromInstance(instance, idRef)) {
+//            throw new IllegalStateException("Could not find the document id for " + instance);
+//        }
+//
+//        assertNoNonUniqueInstance(instance, idRef.value);
 
-        throw new IllegalArgumentException("Document " + idRef.value + " doesn't exist in the session");
+        throw new IllegalArgumentException("Document doesn't exist in the session " + instance);
     }
 
     /**
@@ -772,9 +774,16 @@ public abstract class InMemoryDocumentSessionOperations implements CleanCloseabl
      * @param entity Entity to store
      */
     public void store(Object entity) {
-        Reference<String> stringReference = new Reference<>();
-        boolean hasId = generateEntityIdOnTheClient.tryGetIdFromInstance(entity, stringReference);
-        storeInternal(entity, null, null, !hasId ? ConcurrencyCheckMode.FORCED : ConcurrencyCheckMode.AUTO);
+        String collection = _requestExecutor.getConventions().getCollectionName(entity);
+        Reference<String> idRef = new Reference<>();
+        boolean hasId = generateEntityIdOnTheClient.tryGetIdFromInstance(collection, entity, idRef);
+        storeInternal(entity, null, idRef.value, collection, !hasId ? ConcurrencyCheckMode.FORCED : ConcurrencyCheckMode.AUTO);
+    }
+
+    public void store(String collection, Object entity) {
+        Reference<String> idRef = new Reference<>();
+        boolean hasId = generateEntityIdOnTheClient.tryGetIdFromInstance(collection, entity, idRef);
+        storeInternal(entity, null, idRef.value, collection, !hasId ? ConcurrencyCheckMode.FORCED : ConcurrencyCheckMode.AUTO);
     }
 
     /**
@@ -784,7 +793,11 @@ public abstract class InMemoryDocumentSessionOperations implements CleanCloseabl
      * @param id     Entity identifier
      */
     public void store(Object entity, String id) {
-        storeInternal(entity, null, id, ConcurrencyCheckMode.AUTO);
+        storeInternal(entity, null, id, null, ConcurrencyCheckMode.AUTO);
+    }
+
+    public void store(String collection, Object entity, String id) {
+        storeInternal(entity, null, id, collection, ConcurrencyCheckMode.AUTO);
     }
 
     /**
@@ -795,10 +808,23 @@ public abstract class InMemoryDocumentSessionOperations implements CleanCloseabl
      * @param id           Entity identifier
      */
     public void store(Object entity, String changeVector, String id) {
-        storeInternal(entity, changeVector, id, changeVector == null ? ConcurrencyCheckMode.DISABLED : ConcurrencyCheckMode.FORCED);
+        storeInternal(entity, changeVector, id, null, changeVector == null ? ConcurrencyCheckMode.DISABLED : ConcurrencyCheckMode.FORCED);
     }
 
-    private void storeInternal(Object entity, String changeVector, String id, ConcurrencyCheckMode forceConcurrencyCheck) {
+    public void store(String collection, Object entity, String changeVector, String id) {
+        storeInternal(entity, changeVector, id, collection, changeVector == null ? ConcurrencyCheckMode.DISABLED : ConcurrencyCheckMode.FORCED);
+    }
+
+    private ObjectNode existingMetadataInObjectNodeOrNewMetadata(Object entity) {
+        ObjectNode existing = getConventions().getExistingMetadata(entity);
+        if (existing == null && entity instanceof ObjectNode) {
+            return ((ObjectNode)entity).with(Constants.Documents.Metadata.KEY);
+        }
+
+        return existing != null ? existing :  mapper.createObjectNode();
+    }
+
+    private void storeInternal(Object entity, String changeVector, String id, String collection, ConcurrencyCheckMode forceConcurrencyCheck) {
         if (noTracking) {
             throw new IllegalStateException("Cannot store entity. Entity tracking is disabled in this session.");
         }
@@ -813,15 +839,28 @@ public abstract class InMemoryDocumentSessionOperations implements CleanCloseabl
             return;
         }
 
+        String collectionName = collection != null ? collection : _requestExecutor.getConventions().getCollectionName(entity);
+        ObjectNode metadata = existingMetadataInObjectNodeOrNewMetadata(entity);
+
+        if (collectionName != null) {
+            metadata.put(Constants.Documents.Metadata.COLLECTION, collectionName);
+        }
+
+        String javaType = _requestExecutor.getConventions().getJavaClassName(entity.getClass());
+        if (javaType != null && !(entity instanceof ObjectNode)) {
+            metadata.put(Constants.Documents.Metadata.RAVEN_JAVA_TYPE, javaType);
+        }
+
         if (id == null) {
+            // either is existing object where we haven't noticed the ID yet, or is new one and needs auto generated
             if (generateDocumentKeysOnStore) {
-                id = generateEntityIdOnTheClient.generateDocumentKeyForStorage(entity);
+                id = generateEntityIdOnTheClient.generateDocumentKeyForStorage(collectionName, entity);
             } else {
-                rememberEntityForDocumentIdGeneration(entity);
+                rememberEntityForDocumentIdGeneration(collectionName, entity);
             }
         } else {
-            // Store it back into the Id field so the client has access to it
-            generateEntityIdOnTheClient.trySetIdentity(entity, id);
+            // Store it back into the Ud field so the client has access to it
+            generateEntityIdOnTheClient.trySetIdentity(collectionName, entity, id);
         }
 
         if (deferredCommandsMap.containsKey(IdTypeAndName.create(id, CommandType.CLIENT_ANY_COMMAND, null))) {
@@ -838,19 +877,6 @@ public abstract class InMemoryDocumentSessionOperations implements CleanCloseabl
         // to detect if they generate duplicates.
         assertNoNonUniqueInstance(entity, id);
 
-        String collectionName = _requestExecutor.getConventions().getCollectionName(entity);
-
-        ObjectMapper mapper = JsonExtensions.getDefaultMapper();
-        ObjectNode metadata = mapper.createObjectNode();
-
-        if (collectionName != null) {
-            metadata.set(Constants.Documents.Metadata.COLLECTION, mapper.convertValue(collectionName, JsonNode.class));
-        }
-
-        String javaType = _requestExecutor.getConventions().getJavaClassName(entity.getClass());
-        if (javaType != null) {
-            metadata.set(Constants.Documents.Metadata.RAVEN_JAVA_TYPE, mapper.convertValue(javaType, TextNode.class));
-        }
 
         if (id != null) {
             _knownMissingIds.remove(id);
@@ -859,9 +885,9 @@ public abstract class InMemoryDocumentSessionOperations implements CleanCloseabl
         storeEntityInUnitOfWork(id, entity, changeVector, metadata, forceConcurrencyCheck);
     }
 
-    protected abstract String generateId(Object entity);
+    protected abstract String generateId(String collectionName, Object entity);
 
-    protected void rememberEntityForDocumentIdGeneration(Object entity) {
+    protected void rememberEntityForDocumentIdGeneration(String collectionName, Object entity) {
         throw new NotImplementedException("You cannot set GenerateDocumentIdsOnStore to false without implementing RememberEntityForDocumentIdGeneration");
     }
 

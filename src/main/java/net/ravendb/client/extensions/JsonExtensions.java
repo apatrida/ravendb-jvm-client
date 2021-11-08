@@ -3,6 +3,7 @@ package net.ravendb.client.extensions;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.json.JsonWriteFeature;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.cfg.MapperConfig;
 import com.fasterxml.jackson.databind.deser.ContextualDeserializer;
@@ -144,6 +145,8 @@ public class JsonExtensions {
 
     public static ObjectMapper createDefaultJsonSerializer() {
         ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.getFactory().configure(JsonWriteFeature.ESCAPE_NON_ASCII.mappedFeature(), false);
+
         objectMapper.setPropertyNamingStrategy(new DotNetNamingStrategy());
         objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         objectMapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
@@ -162,11 +165,14 @@ public class JsonExtensions {
 
     public static ObjectMapper getDefaultEntityMapper() {
         ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.getFactory().configure(JsonWriteFeature.ESCAPE_NON_ASCII.mappedFeature(), false);
+
         objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         objectMapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
         objectMapper.setConfig(objectMapper.getSerializationConfig().with(new NetDateFormat()));
         objectMapper.setConfig(objectMapper.getDeserializationConfig().with(new NetDateFormat()));
         objectMapper.setAnnotationIntrospector(new SharpAwareJacksonAnnotationIntrospector());
+
         return objectMapper;
     }
 

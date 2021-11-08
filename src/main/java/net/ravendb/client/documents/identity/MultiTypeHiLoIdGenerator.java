@@ -2,6 +2,7 @@ package net.ravendb.client.documents.identity;
 
 import net.ravendb.client.documents.DocumentStore;
 import net.ravendb.client.documents.conventions.DocumentConventions;
+import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
@@ -29,13 +30,13 @@ public class MultiTypeHiLoIdGenerator {
         _identityPartsSeparator = conventions.getIdentityPartsSeparator();
     }
 
-    public String generateDocumentId(Object entity) {
+    public String generateDocumentId(String collectionName, Object entity) {
         char identityPartsSeparator = conventions.getIdentityPartsSeparator();
         if (_identityPartsSeparator != identityPartsSeparator) {
             maybeRefresh(identityPartsSeparator);
         }
 
-        String typeTagName = conventions.getCollectionName(entity);
+        String typeTagName = ObjectUtils.firstNonNull(collectionName, conventions.getCollectionName(entity));
 
         if (StringUtils.isEmpty(typeTagName)) {
             return null;

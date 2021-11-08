@@ -1,5 +1,7 @@
 .idea/
 /ravendb.iml
 target/
-
+.gradle/
+out/
+build/
 *.iml
