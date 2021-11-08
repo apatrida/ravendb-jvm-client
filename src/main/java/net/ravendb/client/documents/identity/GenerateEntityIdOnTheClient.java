@@ -1,5 +1,7 @@
 package net.ravendb.client.documents.identity;
 
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import net.ravendb.client.documents.conventions.DocumentConventions;
 import net.ravendb.client.exceptions.RavenException;
 import net.ravendb.client.primitives.Reference;
@@ -11,9 +13,9 @@ import java.util.function.Function;
 public class GenerateEntityIdOnTheClient {
 
     private final DocumentConventions _conventions;
-    private final Function<Object, String> _generateId;
+    private final GenerateIdFunction _generateId;
 
-    public GenerateEntityIdOnTheClient(DocumentConventions conventions, Function<Object, String> generateId) {
+    public GenerateEntityIdOnTheClient(DocumentConventions conventions, GenerateIdFunction generateId) {
         this._conventions = conventions;
         this._generateId = generateId;
     }
@@ -28,10 +30,20 @@ public class GenerateEntityIdOnTheClient {
      * @param idHolder output parameter which holds document id
      * @return true if id was read from entity
      */
-    public boolean tryGetIdFromInstance(Object entity, Reference<String> idHolder) {
+    public boolean tryGetIdFromInstance(String collectionName, Object entity, Reference<String> idHolder) {
         if (entity == null) {
             throw new IllegalArgumentException("Entity cannot be null");
         }
+
+        if (entity instanceof ObjectNode) {
+            ObjectNode objEntity = (ObjectNode)entity;
+            String idPropName = _conventions.getFindIdentityPropertyNameFromCollectionName().apply(collectionName);
+            if (idPropName != null && objEntity.has(idPropName) && objEntity.path(idPropName).isTextual()) {
+               idHolder.value = objEntity.get(idPropName).textValue();
+            }
+            return false;
+        }
+
         try {
             Field identityProperty = getIdentityProperty(entity.getClass());
             if (identityProperty != null) {
@@ -53,13 +65,13 @@ public class GenerateEntityIdOnTheClient {
      * @param entity Entity
      * @return Document id
      */
-    public String getOrGenerateDocumentId(Object entity) {
+    public String getOrGenerateDocumentId(String collectionName, Object entity) {
         Reference<String> idHolder = new Reference<>();
-        tryGetIdFromInstance(entity, idHolder);
+        tryGetIdFromInstance(collectionName, entity, idHolder);
         String id = idHolder.value;
         if (id == null) {
             // Generate the key up front
-            id = _generateId.apply(entity);
+            id = _generateId.apply(collectionName, entity);
         }
 
         if (id != null && id.startsWith("/")) {
@@ -68,14 +80,14 @@ public class GenerateEntityIdOnTheClient {
         return id;
     }
 
-    public String generateDocumentKeyForStorage(Object entity) {
-        String id = getOrGenerateDocumentId(entity);
-        trySetIdentity(entity, id);
+    public String generateDocumentKeyForStorage(String collectionName, Object entity) {
+        String id = getOrGenerateDocumentId(collectionName, entity);
+        trySetIdentity(collectionName, entity, id);
         return id;
     }
 
-    public void trySetIdentity(Object entity, String id) {
-        trySetIdentity(entity, id, false);
+    public void trySetIdentity(String collectionName, Object entity, String id) {
+        trySetIdentity(collectionName, entity, id, false);
     }
 
     /**
@@ -84,11 +96,24 @@ public class GenerateEntityIdOnTheClient {
      * @param id Id to set
      * @param isProjection Is projection
      */
-    public void trySetIdentity(Object entity, String id, boolean isProjection) {
-        trySetIdentityInternal(entity, id, isProjection);
+    public void trySetIdentity(String collectionName, Object entity, String id, boolean isProjection) {
+        trySetIdentityInternal(collectionName, entity, id, isProjection);
     }
 
-    private void trySetIdentityInternal(Object entity, String id, boolean isProjection) {
+    private void trySetIdentityInternal(String collectionName, Object entity, String id, boolean isProjection) {
+        if (entity instanceof ObjectNode) {
+            // TODO: we don't do this since it is in the metadata
+//            ObjectNode objEntity = (ObjectNode)entity;
+//            String idPropName = _conventions.getFindIdentityPropertyNameFromCollectionName().apply(collectionName);
+//
+//            if (isProjection && objEntity.has(idPropName) && objEntity.path(idPropName).isTextual()) {
+//                // identity property was already set
+//                return;
+//            }
+//            objEntity.put(idPropName, id);
+            return;
+        }
+
         Class<?> entityType = entity.getClass();
         Field identityProperty = _conventions.getIdentityProperty(entityType);
 

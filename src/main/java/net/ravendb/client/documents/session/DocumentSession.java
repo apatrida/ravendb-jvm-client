@@ -196,8 +196,8 @@ public class DocumentSession extends InMemoryDocumentSessionOperations
      * Generates the document ID.
      */
     @Override
-    protected String generateId(Object entity) {
-        return getConventions().generateDocumentId(getDatabaseName(), entity);
+    protected String generateId(String collectionName, Object entity) {
+        return getConventions().generateDocumentId(getDatabaseName(), collectionName, entity);
     }
 
     public ResponseTimeInformation executeAllPendingLazyOperations() {

@@ -199,7 +199,7 @@ public class SubscriptionBatch<T> {
         _dbName = dbName;
         _logger = logger;
 
-        _generateEntityIdOnTheClient = new GenerateEntityIdOnTheClient(_requestExecutor.getConventions(), entity -> { throw new IllegalStateException("Shouldn't be generating new ids here"); });
+        _generateEntityIdOnTheClient = new GenerateEntityIdOnTheClient(_requestExecutor.getConventions(), (collectionName, entity) -> { throw new IllegalStateException("Shouldn't be generating new ids here"); });
     }
 
     @SuppressWarnings("unchecked")
@@ -242,6 +242,12 @@ public class SubscriptionBatch<T> {
                 projection = projectionNode.asBoolean();
             }
 
+            String collectionName = null;
+            JsonNode collectionNode = metadata.get(Constants.Documents.Metadata.COLLECTION);
+            if (collectionNode != null && collectionNode.isTextual()) {
+                collectionName = collectionNode.asText();
+            }
+
             if (_logger.isDebugEnabled()) {
                 _logger.debug("Got " + id + " (change vector: [" + lastReceivedChangeVector + "], size: " + curDoc.size() + ")");
             }
@@ -270,7 +276,7 @@ public class SubscriptionBatch<T> {
                 }
 
                 if (StringUtils.isNotEmpty(id)) {
-                    _generateEntityIdOnTheClient.trySetIdentity(instance, id);
+                    _generateEntityIdOnTheClient.trySetIdentity(collectionName, instance, id);
                 }
             }
 

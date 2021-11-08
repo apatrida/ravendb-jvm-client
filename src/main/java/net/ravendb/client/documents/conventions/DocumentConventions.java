@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import net.ravendb.client.Constants;
+import net.ravendb.client.documents.identity.DatabaseGenerateIdFunction;
 import net.ravendb.client.documents.operations.configuration.ClientConfiguration;
 import net.ravendb.client.exceptions.RavenException;
 import net.ravendb.client.extensions.JsonExtensions;
@@ -43,7 +44,7 @@ public class DocumentConventions {
 
     private final List<Tuple<Class, IValueForQueryConverter<Object>>> _listOfQueryValueToObjectConverters = new ArrayList<>();
 
-    private List<Tuple<Class, BiFunction<String, Object, String>>> _listOfRegisteredIdConventions = new ArrayList<>();
+    private List<Tuple<Class, DatabaseGenerateIdFunction>> _listOfRegisteredIdConventions = new ArrayList<>();
 
     private boolean _frozen;
     private ClientConfiguration _originalConfiguration;
@@ -57,7 +58,7 @@ public class DocumentConventions {
     private Function<PropertyDescriptor, Boolean> _findIdentityProperty;
 
     private Function<String, String> _transformClassCollectionNameToDocumentIdPrefix;
-    private BiFunction<String, Object, String> _documentIdGenerator;
+    private DatabaseGenerateIdFunction _documentIdGenerator;
     private Function<String, String> _findIdentityPropertyNameFromCollectionName;
     private Function<String, String> _loadBalancerPerSessionContextSelector;
 
@@ -66,6 +67,8 @@ public class DocumentConventions {
     private Function<Class, String> _findJavaClassName;
     private BiFunction<String, ObjectNode, String> _findJavaClass;
     private Function<String, Class> _findJavaClassByName;
+
+    private Function<Object, ObjectNode> _findExistingMetadataOnEntity;
 
     private boolean _useOptimisticConcurrency;
     private boolean _throwIfQueryPageSizeIsNotSet;
@@ -191,6 +194,17 @@ public class DocumentConventions {
         _waitForNonStaleResultsTimeout = Duration.ofSeconds(15);
 
         _sendApplicationIdentifier = true;
+
+        _findExistingMetadataOnEntity = entity -> {
+            if (entity instanceof ObjectNode) {
+                ObjectNode objEntity = (ObjectNode) entity;
+                if (objEntity.path(Constants.Documents.Metadata.KEY).isObject()) {
+                    return (ObjectNode) objEntity.get(Constants.Documents.Metadata.KEY);
+                }
+            }
+
+            return null;
+        };
     }
 
     public boolean hasExplicitlySetCompressionUsage() {
@@ -498,11 +512,11 @@ public class DocumentConventions {
         this._findIdentityPropertyNameFromCollectionName = findIdentityPropertyNameFromCollectionName;
     }
 
-    public BiFunction<String, Object, String> getDocumentIdGenerator() {
+    public DatabaseGenerateIdFunction getDocumentIdGenerator() {
         return _documentIdGenerator;
     }
 
-    public void setDocumentIdGenerator(BiFunction<String, Object, String> documentIdGenerator) {
+    public void setDocumentIdGenerator(DatabaseGenerateIdFunction documentIdGenerator) {
         assertNotFrozen();
         _documentIdGenerator = documentIdGenerator;
     }
@@ -636,7 +650,24 @@ public class DocumentConventions {
             return null;
         }
 
+        if (entity instanceof ObjectNode) {
+            ObjectNode objEntity = (ObjectNode)entity;
+            if (objEntity.path(Constants.Documents.Metadata.KEY).has(Constants.Documents.Metadata.COLLECTION)
+                    && objEntity.get(Constants.Documents.Metadata.KEY).get(Constants.Documents.Metadata.COLLECTION).isTextual()
+                    && !objEntity.get(Constants.Documents.Metadata.KEY).get(Constants.Documents.Metadata.COLLECTION).asText("").trim().equals("")) {
+                return objEntity.get(Constants.Documents.Metadata.KEY).get(Constants.Documents.Metadata.COLLECTION).asText();
+            }
+        }
+
         return getCollectionName(entity.getClass());
+    }
+
+    public ObjectNode getExistingMetadata(Object entity) {
+        if (entity == null || _findExistingMetadataOnEntity == null) {
+            return null;
+        }
+
+        return _findExistingMetadataOnEntity.apply(entity);
     }
 
     /**
@@ -646,16 +677,16 @@ public class DocumentConventions {
      * @return document id
      */
     @SuppressWarnings("unchecked")
-    public String generateDocumentId(String databaseName, Object entity) {
+    public String generateDocumentId(String databaseName, String collectionName, Object entity) {
         Class<?> clazz = entity.getClass();
 
-        for (Tuple<Class, BiFunction<String, Object, String>> listOfRegisteredIdConvention : _listOfRegisteredIdConventions) {
+        for (Tuple<Class, DatabaseGenerateIdFunction> listOfRegisteredIdConvention : _listOfRegisteredIdConventions) {
             if (listOfRegisteredIdConvention.first.isAssignableFrom(clazz)) {
-                return listOfRegisteredIdConvention.second.apply(databaseName, entity);
+                return listOfRegisteredIdConvention.second.apply(databaseName, collectionName, entity);
             }
         }
 
-        return _documentIdGenerator.apply(databaseName, entity);
+        return _documentIdGenerator.apply(databaseName, collectionName, entity);
     }
 
     /**
@@ -667,7 +698,7 @@ public class DocumentConventions {
      * @return document conventions
      */
     @SuppressWarnings("unchecked")
-    public <TEntity> DocumentConventions registerIdConvention(Class<TEntity> clazz, BiFunction<String, TEntity, String> function) {
+    public <TEntity> DocumentConventions registerIdConvention(Class<TEntity> clazz, DatabaseGenerateIdFunction function) {
         assertNotFrozen();
 
         _listOfRegisteredIdConventions.stream()
@@ -677,13 +708,13 @@ public class DocumentConventions {
 
         int index;
         for (index = 0; index < _listOfRegisteredIdConventions.size(); index++) {
-            Tuple<Class, BiFunction<String, Object, String>> entry = _listOfRegisteredIdConventions.get(index);
+            Tuple<Class, DatabaseGenerateIdFunction> entry = _listOfRegisteredIdConventions.get(index);
             if (entry.first.isAssignableFrom(clazz)) {
                 break;
             }
         }
 
-        _listOfRegisteredIdConventions.add(index, Tuple.create(clazz, (BiFunction<String, Object, String>) function));
+        _listOfRegisteredIdConventions.add(index, Tuple.create(clazz, function));
 
         return this;
     }

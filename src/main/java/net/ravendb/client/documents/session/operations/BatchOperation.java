@@ -435,6 +435,7 @@ public class BatchOperation {
 
         String id = getStringField(batchResult, CommandType.PUT, Constants.Documents.Metadata.ID);
         String changeVector = getStringField(batchResult, CommandType.PUT, Constants.Documents.Metadata.CHANGE_VECTOR);
+        String collectionName = getStringField(batchResult, CommandType.PUT, Constants.Documents.Metadata.COLLECTION);
 
         if (isDeferred) {
             DocumentInfo sessionDocumentInfo = _session.documentsById.getValue(id);
@@ -451,7 +452,7 @@ public class BatchOperation {
         _session.documentsById.add(documentInfo);
 
         if (entity != null) {
-            _session.getGenerateEntityIdOnTheClient().trySetIdentity(entity, id);
+            _session.getGenerateEntityIdOnTheClient().trySetIdentity(collectionName, entity, id);
         }
 
         AfterSaveChangesEventArgs afterSaveChangesEventArgs = new AfterSaveChangesEventArgs(_session, documentInfo.getId(), documentInfo.getEntity());
