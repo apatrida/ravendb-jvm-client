@@ -145,7 +145,7 @@ public class JsonExtensions {
 
     public static ObjectMapper createDefaultJsonSerializer() {
         ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.getFactory().configure(JsonWriteFeature.ESCAPE_NON_ASCII.mappedFeature(), false);
+        //objectMapper.getFactory().configure(JsonWriteFeature.ESCAPE_NON_ASCII.mappedFeature(), false);
 
         objectMapper.setPropertyNamingStrategy(new DotNetNamingStrategy());
         objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
@@ -165,7 +165,7 @@ public class JsonExtensions {
 
     public static ObjectMapper getDefaultEntityMapper() {
         ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.getFactory().configure(JsonWriteFeature.ESCAPE_NON_ASCII.mappedFeature(), false);
+        //objectMapper.getFactory().configure(JsonWriteFeature.ESCAPE_NON_ASCII.mappedFeature(), false);
 
         objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         objectMapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
